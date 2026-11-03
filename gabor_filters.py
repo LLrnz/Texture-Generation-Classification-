@@ -4,42 +4,38 @@ import matplotlib.cm as cm
 import math
 
 
-def ChangeBase(x,y,theta):
+def change_base(x, y, theta):
     x_theta = x * math.cos(theta) + y * math.sin(theta)
     y_theta = y * math.cos(theta) - x * math.sin(theta)
     return x_theta, y_theta
 
-def GaborFunction(x,y,theta,f,sigma):
-    r1 = ChangeBase(x,y,theta)[0] / sigma
-    r2 = ChangeBase(x,y,theta)[1] / sigma
-    arg = -0.5 * ( r1**2 + r2**2 ) / sigma**2
-    return math.exp(arg) * math.cos(2*math.pi*f*(ChangeBase(x,y,theta)[0]/sigma))
+def gabor_function(x : np.ndarray, y:np.ndarray, theta:float, f:float, sigma:float):
+    x_theta, y_theta = change_base(x,y,theta)
+    gaussian = np.exp(-0.5 * (x_theta**2 + y_theta**2) / sigma**2)
+    wave = np.cos(2*math.pi*f*x_theta)
+
+    #normalize so that the sum of all the values of the filter = 0
+    k = (gaussian * wave).sum() / gaussian.sum()
+    return gaussian * (wave - k)
 
 def generate_gabor_filters():
-    filters=[]  
-    scales =  [2,4,8,16,32]
-    thetas = [0, 30, 60, 90, 120]#[0, 30, 60, 90, 120, 150, 180]
+    filters=[]
+    scales =  [2,4,8,16] # wavelength in pixels
+    thetas = [0, 30, 60, 90, 120, 150] 
     for s in scales:
         for theta in thetas:
             f = 1.0/s
-            theta = math.radians(theta) # Converts angle x from degrees to radians.
-            radius = 16
-            sigma = 3
+            theta = math.radians(theta) 
+            sigma = 0.56 * s # magic number for wavelength ratio
 
-            M = np.zeros((radius*2,radius*2))
+            radius = int(math.ceil(3 * sigma)) # stop at 3*sigma because the gaussian is nearly 0
 
-            x = -float(radius)
-            for i in range(radius*2):
-                y = -float(radius)
-                for j in range(radius*2):
-                    M[i,j] = GaborFunction(x,y,theta,f,sigma)
-                    y = y + 1
-                x = x + 1
+            # generate matrices centered on (0, 0) to compute gabor for every pixel of the filter at once
+            y, x = np.mgrid[-radius:radius + 1, -radius:radius + 1].astype(float)
+            M = gabor_function(x,y,theta,f,sigma)
 
-            #print M.max(), M.min()
-            # Normalization from 0 to 255
-            #M[:,:] = ( (M[:,:] - M.min() ) * 255 ) / ( M.max() - M.min() )
-            filters.append(M.T)
+            M = M / np.abs(M).sum() # normalize
+            filters.append(M)
 
     return filters
 
