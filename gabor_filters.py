@@ -46,15 +46,15 @@ def generate_gabor_filters():
 
 #print M.max(), M.min()
 
-n = 5 #len(scales)
-m = 5 #len(thetas)
-filters = generate_gabor_filters()
-for i in range(n*m):
-    plt.subplot(n, m, i+1)
-    plt.imshow(filters[i], cmap = cm.gist_rainbow, origin='lower')
+# n = 5 #len(scales)
+# m = 5 #len(thetas)
+# filters = generate_gabor_filters()
+# for i in range(n*m):
+#     plt.subplot(n, m, i+1)
+#     plt.imshow(filters[i], cmap = cm.gist_rainbow, origin='lower')
 
-#plt.imshow(M.T, origin='lower')
-#plt.colorbar()
+# #plt.imshow(M.T, origin='lower')
+# #plt.colorbar()
 
-#plt.savefig('GaborFilter.png')
-plt.show()
+# #plt.savefig('GaborFilter.png')
+# plt.show()
