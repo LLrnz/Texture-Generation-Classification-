@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+from matplotlib.offsetbox import AnnotationBbox, OffsetImage
+from PIL import Image
 
 def mean_shift(data, labels, epsilon, window_size):
     shifted_x = data.copy()
@@ -50,6 +51,28 @@ def show_classification(data, labels, cmap):
     ax.scatter(x, y, c=labels,s=2, cmap=cmap)
 
     ax.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.show()
+
+
+def show_image_classification(patches, data, labels, cmap):
+    x = data[:, 0]
+    y = data[:, 1]
+
+    cmap = plt.get_cmap(cmap)
+    nb_clusters = max(labels) + 1
+    colors = [cmap(label / max(nb_clusters - 1, 1)) for label in labels]
+
+    fig, ax = plt.subplots()
+    ax.scatter(x, y, c=colors, s=2)
+
+    for x0, y0, patch, color in zip(x, y, patches, colors):
+        ab = AnnotationBbox(OffsetImage(patch.astype(np.uint8), zoom=0.3), (x0, y0),
+                            frameon=True, pad=0.15, bboxprops=dict(edgecolor=color, facecolor=color, linewidth=2))
+        ax.add_artist(ab)
+
+    ax.set_title(f"{nb_clusters} clusters")
 
     plt.tight_layout()
     plt.show()
