@@ -4,7 +4,7 @@ import pytest
 from PIL import Image
 
 from gabor_filters import generate_gabor_filters
-from image_classification import assign_to_nearest_center, keep_images, sample_per_image, cluster_centers, cluster_to_image, gabor_features, image_splicer, well_classified_ratio, load_all_images_from_folder, splice_all_images
+from image_classification import assign_to_nearest_center, convolve_2d, keep_images, sample_per_image, cluster_centers, cluster_to_image, gabor_features, image_splicer, well_classified_ratio, load_all_images_from_folder, splice_all_images
 
 
 def save_gif(path, array):
@@ -178,3 +178,28 @@ def test_sample_per_image():
     assert ids.count(0) == 5
     assert ids.count(1) == 3  # fewer patches than asked -> keep them all
     assert set(sampled) <= set(patches)
+
+
+def test_convolve_2d_small_example():
+    patch = np.array([[1.0, 2.0, 3.0],
+                      [4.0, 5.0, 6.0],
+                      [7.0, 8.0, 9.0]])
+    filter = np.array([[0.0, 0.0, 0.0],
+                       [0.0, 0.0, 1.0],
+                       [0.0, 0.0, 0.0]])
+    # the filter is flipped, so each output pixel takes its left neighbour (0 outside the patch)
+    expected = np.array([[0.0, 1.0, 2.0],
+                         [0.0, 4.0, 5.0],
+                         [0.0, 7.0, 8.0]])
+    nptest.assert_array_equal(convolve_2d(patch, filter), expected)
+
+
+@pytest.mark.parametrize("filter_shape", [(3, 3), (5, 7), (4, 4)])
+def test_convolve_2d_matches_fft_features(filter_shape):
+    rng = np.random.default_rng(0)
+    patch = rng.uniform(0, 255, size=(10, 12, 3))
+    filter = rng.normal(size=filter_shape)
+    gray = patch.mean(axis=-1)
+    gray = gray - gray.mean()
+    expected = np.abs(convolve_2d(gray, filter)).mean()
+    assert gabor_features([patch], [filter])[0, 0] == pytest.approx(expected)
