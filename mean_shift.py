@@ -14,12 +14,12 @@ def mean_shift(data, labels, epsilon, window_size):
         for i, y in enumerate(shifted_x):
 
             distances = np.linalg.norm(data - y, axis=1)
-            neighbors = data[distances < window_size]
+            neighbors = data[distances < window_size] # only take points in the window
 
             if len(neighbors) > 0:
-                new_shifted_x[i] = np.mean(neighbors, axis=0)
+                new_shifted_x[i] = np.mean(neighbors, axis=0) # new gravity center
 
-            error = np.max(np.linalg.norm(new_shifted_x - shifted_x, axis=1))
+            error = np.max(np.linalg.norm(new_shifted_x - shifted_x, axis=1)) # if no shift this round, the error is 0
             print(error)
 
         shifted_x = new_shifted_x
@@ -68,7 +68,7 @@ def show_image_classification(patches, data, labels, cmap):
     ax.scatter(x, y, c=colors, s=2)
 
     for x0, y0, patch, color in zip(x, y, patches, colors):
-        ab = AnnotationBbox(OffsetImage(patch.astype(np.uint8), zoom=0.3), (x0, y0),
+        ab = AnnotationBbox(OffsetImage(patch.astype(np.uint8), zoom=0.5), (x0, y0),
                             frameon=True, pad=0.15, bboxprops=dict(edgecolor=color, facecolor=color, linewidth=2))
         ax.add_artist(ab)
 

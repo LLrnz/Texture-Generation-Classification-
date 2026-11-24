@@ -62,13 +62,10 @@ def convolve_2d(patch: np.ndarray, filter: np.ndarray) -> np.ndarray:
 	return result
 
 def convolve_2d_fft(patch: np.ndarray, filter: np.ndarray) -> np.ndarray:
-	# same result as convolve_2d, but computed as a product in the Fourier domain:
 	# conv(patch, filter) = IFFT( FFT(patch) * FFT(filter) )
 	size_x, size_y = patch.shape # grayscale patch
 	filter_size_x, filter_size_y = filter.shape
 
-	# the FFT computes a circular convolution: zero-pad both to the size of the full
-	# linear convolution so that the borders do not wrap around
 	full_x, full_y = size_x + filter_size_x - 1, size_y + filter_size_y - 1
 
 	patch_hat = np.fft.rfft2(patch, s=(full_x, full_y))
@@ -93,53 +90,6 @@ def gabor_features(patches: List[np.ndarray], filters: List[np.ndarray]) -> np.n
 
 	features[:, -1] = brightness
 	return features
-
-def classify(folder_path, patch_size, window_size=2, max_images=None, patches_per_image=None):
-	patchesDO, patchesDT = splice_all_images(folder_path, patch_size)
-
-	# for quick trials only
-	if max_images is not None:
-		all_ids = sorted({image_id for image_id, _ in patchesDO})
-		kept_ids = random.sample(all_ids, min(max_images, len(all_ids)))
-		patchesDO = keep_images(patchesDO, kept_ids)
-		patchesDT = keep_images(patchesDT, kept_ids)
-	if patches_per_image is not None:
-		patchesDO = sample_per_image(patchesDO, patches_per_image)
-		patchesDT = sample_per_image(patchesDT, patches_per_image)
-
-	idsDO, patchesDO = map(list, zip(*patchesDO))
-	idsDT, patchesDT = map(list, zip(*patchesDT))
-
-	# convolate patches with gabor filters
-	gabor_filters = generate_gabor_filters()
-	convolved_DO = gabor_features(patchesDO, gabor_filters)
-	convolved_DT = gabor_features(patchesDT, gabor_filters)
-
-	# normalize
-	mean = convolved_DO.mean(axis=0)
-	std = convolved_DO.std(axis=0)
-	convolved_DO = (convolved_DO - mean) / std
-	convolved_DT = (convolved_DT - mean) / std
-
-	# calculate mean shift with first half
-	labels = []
-	shifted = mean_shift(convolved_DO, labels, 0.01, window_size)
-	labels = np.array(labels)
-	centers = cluster_centers(shifted, labels)
-
-	# apply classification to second half
-	labelsDT = assign_to_nearest_center(convolved_DT, centers)
-
-	# evaluate: each cluster stands for the image most of its DO patches come from
-	cluster_images = cluster_to_image(labels, idsDO)
-	ratioDO, unicityDO = well_classified_ratio(labels, idsDO, cluster_images)
-	ratioDT, unicityDT = well_classified_ratio(labelsDT, idsDT, cluster_images)
-	print(f"{len(centers)} clusters for {len(set(idsDO))} images")
-	print(f"well classified DO (mean shift): {ratioDO:.1%}, cluster unicity: {unicityDO:.2f}")
-	print(f"well classified DT (nearest center): {ratioDT:.1%}, cluster unicity: {unicityDT:.2f}")
-
-	show_image_classification(patchesDO, project_2d(convolved_DO), labels, cm.tab20)
-	return ratioDO, ratioDT
 
 def keep_images(patches: List[Tuple[int, np.ndarray]], kept_ids: List[int]) -> List[Tuple[int, np.ndarray]]:
 	kept_ids = set(kept_ids)
@@ -192,5 +142,54 @@ def project_2d(features: np.ndarray) -> np.ndarray:
 	centered = features - features.mean(axis=0)
 	_, _, vt = np.linalg.svd(centered, full_matrices=False)
 	return centered @ vt[:2].T
+
+
 	
-	
+
+#_______________________________________________________________________________________
+def classify(folder_path, patch_size, window_size=2, max_images=None, patches_per_image=None):
+	patchesDO, patchesDT = splice_all_images(folder_path, patch_size)
+
+	# for quick trials only
+	if max_images is not None:
+		all_ids = sorted({image_id for image_id, _ in patchesDO})
+		kept_ids = random.sample(all_ids, min(max_images, len(all_ids)))
+		patchesDO = keep_images(patchesDO, kept_ids)
+		patchesDT = keep_images(patchesDT, kept_ids)
+	if patches_per_image is not None:
+		patchesDO = sample_per_image(patchesDO, patches_per_image)
+		patchesDT = sample_per_image(patchesDT, patches_per_image)
+
+	idsDO, patchesDO = map(list, zip(*patchesDO))
+	idsDT, patchesDT = map(list, zip(*patchesDT))
+
+	# convolate patches with gabor filters
+	gabor_filters = generate_gabor_filters()
+	convolved_DO = gabor_features(patchesDO, gabor_filters)
+	convolved_DT = gabor_features(patchesDT, gabor_filters)
+
+	# normalize and center
+	mean = convolved_DO.mean(axis=0)
+	std = convolved_DO.std(axis=0)
+	convolved_DO = (convolved_DO - mean) / std
+	convolved_DT = (convolved_DT - mean) / std
+
+	# calculate mean shift with first half
+	labels = []
+	shifted = mean_shift(convolved_DO, labels, 0.01, window_size)
+	labels = np.array(labels)
+	centers = cluster_centers(shifted, labels)
+
+	# apply classification to second half
+	labelsDT = assign_to_nearest_center(convolved_DT, centers)
+
+	# evaluate: each cluster stands for the image most of its DO patches come from
+	cluster_images = cluster_to_image(labels, idsDO)
+	ratioDO, unicityDO = well_classified_ratio(labels, idsDO, cluster_images)
+	ratioDT, unicityDT = well_classified_ratio(labelsDT, idsDT, cluster_images)
+	print(f"{len(centers)} clusters for {len(set(idsDO))} images")
+	print(f"well classified DO (mean shift): {ratioDO:.1%}, cluster unicity: {unicityDO:.2f}")
+	print(f"well classified DT (nearest center): {ratioDT:.1%}, cluster unicity: {unicityDT:.2f}")
+
+	show_image_classification(patchesDO, project_2d(convolved_DO), labels, cm.tab20)
+	return ratioDO, ratioDT

@@ -99,14 +99,15 @@ def compute_patch_distance(p1 : np.ndarray, p2:np.ndarray) -> float:
     distance = distance * distance
     return sum(sum(sum(distance)))
 
-#for one pixel = max(heatmap), compute neighborhood distance with each sub image to find best
+#for one pixel = max(heatmap), compute neighborhood distance with each sub image (window) to find best
 def compute_patch_distance_to_texture(nbh : np.ndarray, texture:np.ndarray, mask:np.ndarray, windows) -> np.ndarray:
     #assuming array of float
     #assuming odd patch size
     nbh = nbh.transpose(2, 0, 1)                
     diff = windows - nbh  
-    diff = diff*diff                       
-    return (diff * mask[None, None, None, :, :]).sum(axis=(2, 3, 4)).astype(int)
+    diff = diff*diff     
+    diff = diff * mask # only counts where pixels have been set                   
+    return diff.sum(axis=(2, 3, 4)).astype(int) #sums all channels
         
 def select_best_patches(distance_map: np.ndarray, texture: np.ndarray, threshold: float) -> List[Pixel]:
     #keep every pixel whose distance is close to the best one: d <= d_min * (1 + threshold)
@@ -121,6 +122,13 @@ def select_best_patches(distance_map: np.ndarray, texture: np.ndarray, threshold
 def pick_random_pixel(candidates: List[Pixel]) -> Pixel:
     return random.choice(candidates)
 
+
+
+
+
+
+
+#_____________________________________________________________________________________
 def efros_leung(sampled_texture: np.ndarray, size: tuple, patch_size: int = 5, threshold:float = 0.3 ) -> np.ndarray:
 
     # Init empty result texture
@@ -131,12 +139,11 @@ def efros_leung(sampled_texture: np.ndarray, size: tuple, patch_size: int = 5, t
     res_padded = np.zeros((H + 2*half, W + 2*half, 3))
     heatmap_padded = np.zeros((H + 2*half, W + 2*half))   # border = 0 = "unknown"
 
-    # res and heatmap are views on the centre: writing to them writes into the padded arrays
+    # res and heatmap are views on the centre
     res = res_padded[half:half + H, half:half + W]
     heatmap = heatmap_padded[half:half + H, half:half + W]
 
     # Get random patch from sample texture
-    array_patch_size = np.array([patch_size, patch_size, 3])
     patch = get_random_patch(sampled_texture, np.array([3,3]))
 
     # save all patches in memory
@@ -151,6 +158,8 @@ def efros_leung(sampled_texture: np.ndarray, size: tuple, patch_size: int = 5, t
         #pick a pixel with a max filled number
         i,j = pick_random_pixel(get_max_filled_neighborhood_points(heatmap))
         candidate_neighborhood = res_padded[i:i + patch_size, j:j + patch_size]
+
+        # map of all pixels that were set
         known_mask = (heatmap_padded[i:i + patch_size, j:j + patch_size] == -np.inf).astype(float)
 
         #Compute distance to neighborhood
