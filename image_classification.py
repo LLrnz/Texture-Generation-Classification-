@@ -24,7 +24,7 @@ def splice_all_images(folder_path, patch_size) -> Tuple[List[Tuple[int, np.ndarr
 def load_all_images_from_folder(folder_path) -> List[np.ndarray] :
 	image_list =[]
 	for file in os.listdir(folder_path):
-		if file.endswith(".gif"):
+		if file.endswith(".png"):
 			im = Image.open(os.path.join(folder_path, file))
 			im = im.convert(mode='RGB')
 			im = np.array(im).astype(float)
@@ -61,6 +61,22 @@ def convolve_2d(patch: np.ndarray, filter: np.ndarray) -> np.ndarray:
 			result[i, j] = np.sum(window * flipped)
 	return result
 
+def convolve_2d_fft(patch: np.ndarray, filter: np.ndarray) -> np.ndarray:
+	# same result as convolve_2d, but computed as a product in the Fourier domain:
+	# conv(patch, filter) = IFFT( FFT(patch) * FFT(filter) )
+	size_x, size_y = patch.shape # grayscale patch
+	filter_size_x, filter_size_y = filter.shape
+
+	# the FFT computes a circular convolution: zero-pad both to the size of the full
+	# linear convolution so that the borders do not wrap around
+	full_x, full_y = size_x + filter_size_x - 1, size_y + filter_size_y - 1
+
+	patch_hat = np.fft.rfft2(patch, s=(full_x, full_y))
+	filter_hat = np.fft.rfft2(filter, s=(full_x, full_y))
+	full = np.fft.irfft2(patch_hat * filter_hat, s=(full_x, full_y))
+
+	top, left = (filter_size_x - 1) // 2, (filter_size_y - 1) // 2
+	return full[top:top + size_x, left:left + size_y]
 
 def gabor_features(patches: List[np.ndarray], filters: List[np.ndarray]) -> np.ndarray:
 	gray = np.stack(patches).mean(axis=-1)
@@ -72,7 +88,7 @@ def gabor_features(patches: List[np.ndarray], filters: List[np.ndarray]) -> np.n
 
 	for i, g in enumerate(gray):
 		for k, filter in enumerate(filters):
-			response = convolve_2d(g, filter)
+			response = convolve_2d_fft(g, filter)
 			features[i, k] = np.abs(response).mean()
 
 	features[:, -1] = brightness
@@ -116,11 +132,11 @@ def classify(folder_path, patch_size, window_size=2, max_images=None, patches_pe
 
 	# evaluate: each cluster stands for the image most of its DO patches come from
 	cluster_images = cluster_to_image(labels, idsDO)
-	ratioDO = well_classified_ratio(labels, idsDO, cluster_images)
-	ratioDT = well_classified_ratio(labelsDT, idsDT, cluster_images)
+	ratioDO, unicityDO = well_classified_ratio(labels, idsDO, cluster_images)
+	ratioDT, unicityDT = well_classified_ratio(labelsDT, idsDT, cluster_images)
 	print(f"{len(centers)} clusters for {len(set(idsDO))} images")
-	print(f"well classified DO (mean shift): {ratioDO:.1%}")
-	print(f"well classified DT (nearest center): {ratioDT:.1%}")
+	print(f"well classified DO (mean shift): {ratioDO:.1%}, cluster unicity: {unicityDO:.2f}")
+	print(f"well classified DT (nearest center): {ratioDT:.1%}, cluster unicity: {unicityDT:.2f}")
 
 	show_image_classification(patchesDO, project_2d(convolved_DO), labels, cm.tab20)
 	return ratioDO, ratioDT
@@ -159,12 +175,22 @@ def cluster_to_image(labels: np.ndarray, ids: List[int]) -> np.ndarray:
 		count.append(np.bincount(ids[labels == c]).argmax())
 	return np.array(count)
 
-def well_classified_ratio(labels: np.ndarray, ids: List[int], cluster_images: np.ndarray) -> float:
-	return float(np.mean(cluster_images[labels] == np.asarray(ids)))
+def well_classified_ratio(labels: np.ndarray, ids: List[int], cluster_images: np.ndarray) -> Tuple[float, float]:
+	labels = np.asarray(labels)
+	ids = np.asarray(ids)
+	ratio = float(np.mean(cluster_images[labels] == ids))
+
+	# for each image: 1 / number of distinct clusters its patches fall into
+	# 1.0 = all its patches are in the same cluster, 0.5 = spread across 2 clusters, ...
+	inverse_spread = [1 / len(np.unique(labels[ids == image_id])) for image_id in np.unique(ids)]
+	cluster_unicity = float(np.mean(inverse_spread))
+
+	return ratio, cluster_unicity
 
 def project_2d(features: np.ndarray) -> np.ndarray:
 	# PCA on two axis to display
 	centered = features - features.mean(axis=0)
 	_, _, vt = np.linalg.svd(centered, full_matrices=False)
 	return centered @ vt[:2].T
+	
 	
