@@ -4,4 +4,5 @@ __pycache__
 .venv
 .pytest_cache
 /classif_data
-*.png
+/old_exports
+/exports
