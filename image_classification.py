@@ -147,7 +147,7 @@ def project_2d(features: np.ndarray) -> np.ndarray:
 	
 
 #_______________________________________________________________________________________
-def classify(folder_path, patch_size, window_size=2, max_images=None, patches_per_image=None):
+def classify(folder_path, patch_size, window_size=2, max_images=None, patches_per_image=None, threshold = 0.01):
 	patchesDO, patchesDT = splice_all_images(folder_path, patch_size)
 
 	# for quick trials only
@@ -176,7 +176,7 @@ def classify(folder_path, patch_size, window_size=2, max_images=None, patches_pe
 
 	# calculate mean shift with first half
 	labels = []
-	shifted = mean_shift(convolved_DO, labels, 0.01, window_size)
+	shifted = mean_shift(convolved_DO, labels, threshold, window_size)
 	labels = np.array(labels)
 	centers = cluster_centers(shifted, labels)
 
